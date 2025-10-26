@@ -3,14 +3,8 @@ import re
 from urllib.parse import urlparse
 from html import unescape
 
-# ----------------------------------------------------
-# DOSYAYI YÜKLE
-# ----------------------------------------------------
 df = pd.read_csv("out/enriched.csv")
 
-# ----------------------------------------------------
-# YARDIMCI: güvenli strip + html çözücü
-# ----------------------------------------------------
 def norm_text(x: str):
     if not isinstance(x, str):
         return None
@@ -25,12 +19,6 @@ def norm_text(x: str):
     x = re.sub(r"\s+", " ", x)
     return x or None
 
-# ----------------------------------------------------
-# 1) OWNER TEMİZLİĞİ — AŞIRI KİRİLİK FİLTRESİ
-# ----------------------------------------------------
-# Örnek çöpler: 
-#  UEEgWkVc5cQO88xd5GZcUTV" />, open-sans-css, 'der angegebenen E-Mail-Adresse sind',
-#  in eines tagesaktuellen..., alt erstellt..., figmeta, woff, cookie, javascript, css ...
 OWNER_BLACKLIST_SUBSTR = [
     "alt erstellt", "für die richtigkeit", "fuer die richtigkeit",
     "in eines tagesaktuellen", "figmeta", "fullscreen", "uexbl",
@@ -89,10 +77,6 @@ def clean_owner(x):
 
 df["owner_name"] = df.get("owner_name", pd.Series([None]*len(df))).apply(clean_owner)
 
-# ----------------------------------------------------
-# 2) EMAIL TEMİZLİĞİ — NORMALİZE + GEÇERLİLİK
-#    (generic mailler SILINMEZ, sadece flaglenir)
-# ----------------------------------------------------
 EMAIL_RE = re.compile(r"^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$", re.I)
 BAD_DOMAIN_SUBSTR = ["example", "beispiel", "domain.com", "localhost", "invalid", "test"]
 GENERIC_LOCALS = {
@@ -126,14 +110,11 @@ def clean_email(x):
 
 df["email"] = df.get("email", pd.Series([None]*len(df))).apply(clean_email)
 
-# generic flag
+
 df["_email_is_generic"] = df["email"].apply(
     lambda e: isinstance(e, str) and e.split("@",1)[0].split("+",1)[0].lower() in GENERIC_LOCALS
 )
 
-# ----------------------------------------------------
-# 3) WEBSITE vs EMAIL DOMAIN (hafif kontrol)
-# ----------------------------------------------------
 def registrable_domain(url):
     try:
         netloc = urlparse(str(url)).netloc.lower()
@@ -154,21 +135,12 @@ if "website" in df.columns:
 else:
     df["_email_matches_site"] = None
 
-# ----------------------------------------------------
-# 4) SADECE EMAILİ OLANLARI TUT
-# ----------------------------------------------------
 df = df[df["email"].notna()]
 
-# ----------------------------------------------------
-# 5) DUPLICATE TEMİZLİĞİ
-# ----------------------------------------------------
 keep_cols = [c for c in ["business_name","postal_code","town","email"] if c in df.columns]
 if keep_cols:
     df = df.drop_duplicates(subset=keep_cols)
 
-# ----------------------------------------------------
-# 6) KAYDET + ÖRNEK
-# ----------------------------------------------------
 out_clean = "out/gastro_germany_clean.csv"
 df.to_csv(out_clean, index=False, encoding="utf-8")
 print("✅ Temiz CSV oluşturuldu:", out_clean)
